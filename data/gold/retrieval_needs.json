@@ -1,0 +1,23 @@
+{
+  "description": "Dev scenarios whose decision depends on a supplier-side fact, mapped to the knowledge items that state that fact. A scenario counts as covered when at least one of its items is retrieved. Used by scripts/eval_retrieval.py to measure retrieval recall on dev.",
+  "needs": {
+    "gold-002": ["pd-001", "pd-002"],
+    "gold-006": ["pb-001"],
+    "gold-008": ["pb-002"],
+    "gold-010": ["pd-005"],
+    "gold-014": ["pb-001"],
+    "gold-016": ["pd-003"],
+    "gold-018": ["pd-001", "pd-002"],
+    "gold-022": ["pb-001"],
+    "gold-024": ["pd-009"],
+    "gold-026": ["pd-004"],
+    "gold-030": ["pb-001"],
+    "gold-032": ["pd-008"],
+    "gold-034": ["pb-001"],
+    "gold-038": ["pb-001"],
+    "gold-040": ["pd-017", "pd-011"]
+  },
+  "decision_depends_on_supplier_fact": [
+    "gold-008", "gold-016", "gold-024", "gold-026", "gold-032", "gold-040"
+  ]
+}

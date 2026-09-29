@@ -12,7 +12,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 from .config import Settings
 from .llm import complete_json
 from .prompts import NBA_JSON_SCHEMA, PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
-from .retriever import BM25Retriever, scenario_query
+from .retriever import BM25Retriever
 from .schema import Action, NBARecommendation, SalesStage, Scenario
 
 SYSTEM_NAMES = ("rule", "llm", "rag")
@@ -116,10 +116,10 @@ def _run_model(s: Scenario, ctx: Context, with_knowledge: bool) -> SystemOutput:
     if with_knowledge:
         if ctx.retriever is None:
             raise RuntimeError("the rag system needs a retriever")
-        hits = ctx.retriever.search(scenario_query(safe), ctx.settings.top_k)
+        hits = ctx.retriever.retrieve(safe, ctx.settings.top_k, ctx.settings.retrieval)
     items = [h[0] for h in hits]
     retrieved_ids = [i.id for i in items]
-    top_score = float(hits[0][1]) if hits else (0.0 if with_knowledge else None)
+    top_score = max(float(h[1]) for h in hits) if hits else (0.0 if with_knowledge else None)
 
     rec, stats, error = complete_json(
         settings=ctx.settings,
@@ -132,7 +132,8 @@ def _run_model(s: Scenario, ctx: Context, with_knowledge: bool) -> SystemOutput:
         run_id=ctx.run_id,
         raw_dir=ctx.raw_dir,
         tag={"kind": "system", "system": name, "scenario_id": s.id,
-             "prompt_version": PROMPT_VERSION, "retrieved_ids": retrieved_ids},
+             "prompt_version": PROMPT_VERSION, "retrieved_ids": retrieved_ids,
+             "retrieval": ctx.settings.retrieval if with_knowledge else None},
     )
     return SystemOutput(
         system=name, scenario_id=s.id, recommendation=rec,

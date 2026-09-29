@@ -38,9 +38,15 @@ def test_eval_report_and_gate(tmp_path, scenarios_path, knowledge_dir):
     assert "label_rationale" not in blob
 
     assert tune_gate.main(["--run-id", "mock-test", "--results-dir", str(results),
-                           "--max-abstain", "1.0"]) == 0
+                           "--rule", "accuracy", "--max-abstain", "1.0"]) == 0
     gate = json.loads((results / "gate.json").read_text(encoding="utf-8"))
-    assert 0 <= gate["tau_conf"] <= 1
+    assert gate["rule_name"] == "accuracy" and 0 <= gate["tau_conf"] <= 1
+
+    assert tune_gate.main(["--run-id", "mock-test", "--results-dir", str(results),
+                           "--rule", "percentile", "--percentile", "0.2"]) == 0
+    gate = json.loads((results / "gate.json").read_text(encoding="utf-8"))
+    assert gate["rule_name"] == "percentile" and 0 < gate["tau_conf"] <= 1
+    assert gate["dev_abstain_rate"] <= 0.5
 
     assert report.main(["--results-dir", str(results)]) == 0
     text = (results / "tables" / "report_mock-test.md").read_text(encoding="utf-8")

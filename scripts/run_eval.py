@@ -64,7 +64,17 @@ def previous_heldout_runs(results_dir: Path, variant: str) -> List[str]:
     return found
 
 
-def to_row(out: SystemOutput, s: Scenario, run_id: str) -> Dict[str, Any]:
+def fact_dependent_ids() -> Set[str]:
+    """Dev scenarios flagged in data/gold/retrieval_needs.json. Generated scenarios carry
+    the flag in their own meta."""
+    path = paths.GOLD / "retrieval_needs.json"
+    if not path.exists():
+        return set()
+    with open(path, "r", encoding="utf-8") as f:
+        return set(json.load(f).get("decision_depends_on_supplier_fact", []))
+
+
+def to_row(out: SystemOutput, s: Scenario, run_id: str, fact_ids: Set[str] = frozenset()) -> Dict[str, Any]:
     rec = out.recommendation
     action = rec.action.value if rec is not None else None
     gold = s.label.value
@@ -92,6 +102,7 @@ def to_row(out: SystemOutput, s: Scenario, run_id: str) -> Dict[str, Any]:
         "has_incumbent": s.has_incumbent,
         "export_oriented": s.export_oriented,
         "ambiguous": s.ambiguous,
+        "depends_on_supplier_fact": bool(s.meta.get("depends_on_supplier_fact", s.id in fact_ids)),
     }
 
 
@@ -224,6 +235,7 @@ def main(argv=None) -> int:
         with open(run_dir / "run_meta.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
+    fact_ids = fact_dependent_ids()
     ctx = Context(settings=settings, retriever=retriever, run_id=run_id,
                   raw_dir=paths.raw_dir(results_dir))
 
@@ -237,7 +249,7 @@ def main(argv=None) -> int:
             if (name, s.id) in done:
                 continue
             out = SYSTEMS[name](s, ctx)
-            row = to_row(out, s, run_id)
+            row = to_row(out, s, run_id, fact_ids)
             append_jsonl(pred_path, row)
             mark = "ok " if row["correct"] else ("ERR" if row["action"] is None else "x  ")
             print("[%d/%d] %-4s %-12s %s gold=%s pred=%s"

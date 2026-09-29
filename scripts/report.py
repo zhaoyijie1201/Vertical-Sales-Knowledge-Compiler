@@ -69,8 +69,8 @@ def t2_abstention(run, current_gate: Optional[Dict[str, Any]] = None) -> Optiona
     thresholds existed falls back to the current results/gate.json and says so."""
     gate = run["meta"].get("gate")
     origin = "fixed before this run"
-    if not gate and run["meta"]["split"] != "heldout":
-        gate, origin = current_gate, "chosen after this run, from results/gate.json"
+    if run["meta"]["split"] != "heldout" and current_gate:
+        gate, origin = current_gate, "current results/gate.json; thresholds are tuned on dev"
     rows = by_system(run["rows"]).get("rag")
     if not gate or not rows:
         return None
@@ -94,7 +94,9 @@ def t2_abstention(run, current_gate: Optional[Dict[str, Any]] = None) -> Optiona
 def t3_slices(run) -> pd.DataFrame:
     groups = by_system(run["rows"])
     recs = []
-    for key in ("sales_stage", "customer_size", "ambiguous", "has_incumbent"):
+    for key in ("depends_on_supplier_fact", "sales_stage", "customer_size", "ambiguous", "has_incumbent"):
+        if not any(key in r for r in run["rows"]):
+            continue
         values = sorted({str(r.get(key)) for r in run["rows"]})
         for v in values:
             rec = {"slice": key, "value": v}
@@ -161,6 +163,7 @@ def render_run(run, current_gate: Optional[Dict[str, Any]] = None) -> str:
         "| model under test | %s |" % ("mock" if m.get("mock") else st.get("model_under_test")),
         "| prompt version | %s |" % m["prompt_version"],
         "| top_k | %s |" % st.get("top_k"),
+        "| retrieval | %s |" % st.get("retrieval", "single"),
         "| scenarios | %d from `%s` |" % (m["n_scenarios"], m["scenarios_file"]),
         "| knowledge items | %d |" % m["n_knowledge_items"],
         "| scenarios sha256 | `%s` |" % m["scenarios_sha256"][:16],

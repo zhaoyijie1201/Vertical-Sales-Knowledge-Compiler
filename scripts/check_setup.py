@@ -38,6 +38,7 @@ def main(argv=None) -> int:
     print("generation, heldout %s" % (st.model_gen_heldout or "(not set)"))
     print("response format     %s" % st.response_format)
     print("top_k               %d" % st.top_k)
+    print("retrieval           %s" % st.retrieval)
     print("prices per Mtok     in %s, out %s, checked on %s"
           % (st.price_in_per_mtok, st.price_out_per_mtok, st.price_checked_on or "n/a"))
 

@@ -19,7 +19,7 @@ from vskc import paths
 from vskc.cli import fail, now_iso, now_stamp, rel, setup_console
 from vskc.config import load_settings
 from vskc.dataio import append_jsonl
-from vskc.generation import SCENARIO_SCHEMA, TEMPLATES, sample_grid, scenario_user_prompt
+from vskc.generation import SCENARIO_SCHEMA, TEMPLATES, sample_plan, scenario_user_prompt
 from vskc.llm import complete_json
 from vskc.schema import Scenario
 
@@ -34,6 +34,8 @@ def parse_args(argv):
     p.add_argument("--template", choices=sorted(TEMPLATES), required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--id-prefix", required=True)
+    p.add_argument("--hook-share", type=float, default=0.0,
+                   help="share of scenarios whose decision depends on a supplier-side fact")
     p.add_argument("--results-dir", type=Path, default=paths.RESULTS)
     p.add_argument("--mock", action="store_true")
     return p.parse_args(argv)
@@ -54,7 +56,9 @@ def main(argv=None) -> int:
             return fail("the generation model must differ from the model under test (%s)" % model)
 
     run_id = "%sgen-%s-%s" % ("mock-" if settings.mock else "", args.role, now_stamp())
-    points = sample_grid(args.n, args.seed)
+    points = sample_plan(args.n, args.seed, args.hook_share)
+    print("%d scenarios, %d with a supplier-fact hook"
+          % (len(points), sum(1 for p in points if p["depends_on_supplier_fact"])))
     written = failed = 0
 
     for i, point in enumerate(points, 1):
@@ -72,7 +76,9 @@ def main(argv=None) -> int:
                 objections=[str(x) for x in d.get("objections", [])][:3],
                 meta={"source": "synthetic", "gen_model": "mock" if settings.mock else model,
                       "template": args.template, "seed": args.seed, "grid": point,
-                      "ambiguous": bool(point["ambiguous"]), "generated_at": now_iso(),
+                      "ambiguous": bool(point["ambiguous"]),
+                      "depends_on_supplier_fact": bool(point["depends_on_supplier_fact"]),
+                      "generated_at": now_iso(),
                       "gen_run_id": run_id},
             )
 

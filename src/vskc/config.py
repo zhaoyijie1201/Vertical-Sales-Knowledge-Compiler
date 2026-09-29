@@ -33,6 +33,7 @@ class Settings:
     model_gen_dev: str
     model_gen_heldout: str
     top_k: int
+    retrieval: str                # single | fused
     max_tokens: int
     response_format: str          # json_schema | json_object | none
     price_in_per_mtok: Optional[float]
@@ -54,6 +55,7 @@ def load_settings(mock: bool = False) -> Settings:
         model_gen_dev=os.environ.get("VSKC_MODEL_GEN_DEV", "").strip(),
         model_gen_heldout=os.environ.get("VSKC_MODEL_GEN_HELDOUT", "").strip(),
         top_k=_int("VSKC_TOP_K", 5),
+        retrieval=os.environ.get("VSKC_RETRIEVAL", "fused").strip() or "fused",
         max_tokens=_int("VSKC_MAX_TOKENS", 4000),
         response_format=os.environ.get("VSKC_RESPONSE_FORMAT", "json_schema").strip() or "json_schema",
         price_in_per_mtok=_float("VSKC_PRICE_IN_PER_MTOK"),

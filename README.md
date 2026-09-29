@@ -58,6 +58,7 @@ The tests use mock replies and small fixture files. They call no model and need 
 
    ```bash
    python scripts/validate_data.py
+   python scripts/eval_retrieval.py
    python scripts/leakage_check.py --split dev
    python scripts/run_eval.py --split dev
    python scripts/run_eval.py --split dev --variant stripped
@@ -108,6 +109,34 @@ tests/           unit tests and an end-to-end mock run
   labels the generated scenarios.
 - **Same prompt for both model systems.** The generic LLM and the RAG system differ only
   in whether the knowledge block is empty.
+
+## Design decisions fixed before the held-out set existed
+
+These were committed before any held-out scenario was generated.
+
+**Held-out composition.** 80 scenarios. At least 40 percent carry a customer requirement
+whose consequence depends on a fact that only the knowledge base states, such as a
+product's temperature limit or the minimum quantity for a custom housing. Each such
+requirement is generated in two versions, one the supplier can meet and one it cannot,
+so the fact changes the right action. The generator is told the customer's requirement
+only. It is never told what the supplier can do. Accuracy is reported separately for
+scenarios that depend on a supplier fact and for those that do not.
+
+Reason: on the 40 dev scenarios a model with no knowledge base already scores 95
+percent, and every one of its errors is a scenario that needs a supplier fact. A
+held-out set without such scenarios could not show whether the knowledge base matters.
+
+**Retrieval.** BM25 with two queries per scenario, the narrative and the pain point and
+objection phrases, merged by reciprocal rank fusion, top 5. On the 15 dev scenarios that
+need a supplier fact this retrieves the needed item for 15, against 12 for a single
+query. Reproduce with `python scripts/eval_retrieval.py`. The mode was chosen on dev,
+so that recall is optimistic.
+
+**Gate thresholds.** The RAG system made no wrong answer on dev, so thresholds cannot be
+learned from errors. They are set to the 10th percentile of the dev confidence and of
+the dev retrieval score: a case is escalated when the system is less confident, or the
+knowledge base matches less well, than on nine in ten dev cases. Values are in
+`results/gate.json`.
 
 ## Build or rent
 

@@ -3,7 +3,7 @@ from pydantic import ValidationError
 
 from vskc.gate import (HUMAN_REVIEW, PASS, REASON_LOW_CONFIDENCE, REASON_NOT_COVERED,
                        REASON_SYSTEM_ERROR, REASON_UNKNOWN_EVIDENCE, gate)
-from vskc.generation import GRID, sample_grid
+from vskc.generation import GRID, HOOKS, sample_grid, sample_plan, scenario_user_prompt
 from vskc.leakage import PLACEHOLDER, knowledge_rationale_overlap, strip_narrative
 from vskc.llm import extract_json
 from vskc.metrics import abstention_summary, accuracy, majority_baseline, wilson
@@ -236,3 +236,57 @@ def test_sample_grid_is_reproducible_and_balanced():
     stages = [p["sales_stage"] for p in a]
     assert all(stages.count(s) == 12 for s in GRID["sales_stage"])
     assert sum(p["ambiguous"] for p in a) == 9
+
+
+# ------------------------------------------------------------------ fused retrieval
+
+def test_fused_retrieval_finds_fact_named_only_in_fields(knowledge, scenarios):
+    s = scenarios[2].without_label()          # hazardous-area certification case
+    r = BM25Retriever(knowledge)
+    ids = [i.id for i, _ in r.retrieve(s, 3, "fused")]
+    assert "fx-pb-003" in ids
+
+
+def test_fused_scores_are_bm25_scores(knowledge, scenarios):
+    r = BM25Retriever(knowledge)
+    s = scenarios[0].without_label()
+    single = dict((i.id, sc) for i, sc in r.retrieve(s, 5, "single"))
+    for item, score in r.retrieve(s, 5, "fused"):
+        assert score > 0
+    assert set(single)  # both modes return something on the fixture
+
+
+def test_retrieve_rejects_unknown_mode(knowledge, scenarios):
+    with pytest.raises(ValueError):
+        BM25Retriever(knowledge).retrieve(scenarios[0], 5, "semantic")
+
+
+def test_fused_handles_scenario_without_fields(knowledge, scenarios):
+    s = scenarios[0].without_label().model_copy(update={"pain_points": [], "objections": []})
+    assert BM25Retriever(knowledge).retrieve(s, 5, "fused")
+
+
+# ------------------------------------------------------------------ supplier-fact hooks
+
+def test_plan_has_requested_share_of_hooks():
+    plan = sample_plan(80, seed=2026, hook_share=0.4)
+    hooked = [p for p in plan if p["depends_on_supplier_fact"]]
+    assert len(plan) == 80 and len(hooked) == 32
+    assert {p["hook"]["hook"] for p in hooked} == {h["id"] for h in HOOKS}
+    assert {p["hook"]["side"] for p in hooked} == {"within", "beyond"}
+    assert plan == sample_plan(80, seed=2026, hook_share=0.4)
+
+
+def test_plan_without_hooks_matches_grid():
+    assert all(not p["depends_on_supplier_fact"] for p in sample_plan(20, seed=1))
+
+
+def test_hook_prompt_states_requirement_but_no_supplier_fact():
+    for p in sample_plan(40, seed=3, hook_share=0.5):
+        text = scenario_user_prompt(p)
+        if p["depends_on_supplier_fact"]:
+            assert p["hook"]["requirement"] in text
+            for forbidden in ("180", "2,000", "300 units", "up to 5 percent", "sales director"):
+                assert forbidden not in text
+        for a in Action:
+            assert a.value not in text

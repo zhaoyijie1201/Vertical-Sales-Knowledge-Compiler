@@ -2,10 +2,20 @@
 
     python scripts/tune_gate.py --run-id dev-raw-20261002-093000
 
-Selection rule, fixed before looking at any result:
-    among threshold pairs whose abstain rate is at most --max-abstain (default 0.25),
-    take the one with the highest accuracy on answered cases;
-    break ties by the lower abstain rate, then the lower tau_conf, then the lower tau_ret.
+Two selection rules, both fixed before looking at any held-out result.
+
+accuracy    among threshold pairs whose abstain rate is at most --max-abstain (default
+            0.25), take the one with the highest accuracy on answered cases; break ties
+            by the lower abstain rate, then the lower tau_conf, then the lower tau_ret.
+            Needs wrong answers on dev to learn from.
+
+percentile  tau_conf and tau_ret are the --percentile (default 0.10) quantile of the
+            confidence and of the retrieval score on dev. A held-out case is escalated
+            when the system is less confident, or the knowledge base matches less well,
+            than on nine in ten dev cases. Needs no wrong answers.
+
+auto        (default) accuracy when the system made at least --min-errors (default 5)
+            wrong answers on dev, percentile otherwise.
 
 Refuses to use a held-out run.
 """
@@ -28,6 +38,9 @@ def parse_args(argv):
     p.add_argument("--system", default="rag")
     p.add_argument("--results-dir", type=Path, default=paths.RESULTS)
     p.add_argument("--max-abstain", type=float, default=0.25)
+    p.add_argument("--rule", choices=["auto", "accuracy", "percentile"], default="auto")
+    p.add_argument("--percentile", type=float, default=0.10)
+    p.add_argument("--min-errors", type=int, default=5)
     return p.parse_args(argv)
 
 
@@ -58,11 +71,29 @@ def main(argv=None) -> int:
             s = abstention_summary(rows, tc, tr)
             scan.append(s)
 
-    eligible = [s for s in scan if s["abstain_rate"] <= args.max_abstain and s["answered"] > 0]
-    if not eligible:
-        return fail("no threshold pair keeps the abstain rate at or below %.2f" % args.max_abstain)
-    best = sorted(eligible, key=lambda s: (-s["answered_accuracy"], s["abstain_rate"],
-                                           s["tau_conf"], s["tau_ret"]))[0]
+    n_wrong = sum(1 for r in rows if not r["correct"])
+    rule = args.rule
+    if rule == "auto":
+        rule = "accuracy" if n_wrong >= args.min_errors else "percentile"
+
+    if rule == "accuracy":
+        eligible = [s for s in scan if s["abstain_rate"] <= args.max_abstain and s["answered"] > 0]
+        if not eligible:
+            return fail("no threshold pair keeps the abstain rate at or below %.2f" % args.max_abstain)
+        best = sorted(eligible, key=lambda s: (-s["answered_accuracy"], s["abstain_rate"],
+                                               s["tau_conf"], s["tau_ret"]))[0]
+        rule_text = "max answered accuracy subject to abstain rate <= %.2f" % args.max_abstain
+    else:
+        confs = [r["confidence"] for r in rows if r["confidence"] is not None]
+        if not confs:
+            return fail("no confidence values in this run")
+        tau_conf = round(percentile(confs, args.percentile), 4)
+        tau_ret = round(percentile(scores, args.percentile), 4) if scores else 0.0
+        best = abstention_summary(rows, tau_conf, tau_ret)
+        scan.append(best)
+        rule_text = ("%.0fth percentile of dev confidence and of dev retrieval score "
+                     "(%d wrong answers on dev, too few for the accuracy rule)"
+                     % (100 * args.percentile, n_wrong))
 
     gate = {
         "tau_conf": best["tau_conf"],
@@ -70,7 +101,9 @@ def main(argv=None) -> int:
         "selected_on_run": args.run_id,
         "selected_on_split": meta["split"],
         "system": args.system,
-        "rule": "max answered accuracy subject to abstain rate <= %.2f" % args.max_abstain,
+        "rule": rule_text,
+        "rule_name": rule,
+        "dev_wrong_answers": n_wrong,
         "selected_at": now_iso(),
         "dev_abstain_rate": best["abstain_rate"],
         "dev_answered_accuracy": best["answered_accuracy"],

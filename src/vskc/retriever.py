@@ -23,8 +23,23 @@ def tokenize(text: str) -> List[str]:
     return [t for t in _TOKEN.findall(text.lower()) if len(t) > 1 and t not in STOPWORDS]
 
 
+RETRIEVAL_MODES = ("single", "fused")
+RRF_C = 60
+
+
 def scenario_query(s: Scenario) -> str:
+    """One query from everything the scenario says."""
     return " ".join([s.narrative] + list(s.pain_points) + list(s.objections))
+
+
+def scenario_queries(s: Scenario) -> List[str]:
+    """Two queries: the narrative, and the short pain point and objection phrases.
+
+    A long narrative dilutes the few terms that matter. The short phrases carry them
+    undiluted, so the two rankings are fused instead of concatenating the text.
+    """
+    fields = " ".join(list(s.pain_points) + list(s.objections)).strip()
+    return [s.narrative] + ([fields] if fields else [])
 
 
 class BM25Retriever:
@@ -66,3 +81,32 @@ class BM25Retriever:
         scores = self.scores(query)
         order = sorted(range(self._n), key=lambda i: (-scores[i], self.items[i].id))
         return [(self.items[i], scores[i]) for i in order[:k] if scores[i] > 0.0]
+
+    def search_fused(self, queries: Sequence[str], k: int = 5) -> List[Tuple[KnowledgeItem, float]]:
+        """Reciprocal rank fusion over one ranking per query.
+
+        Returns the top-k items in fused order. The score attached to each item is its
+        best BM25 score over the queries, which keeps the value comparable with `search`
+        and usable as the retrieval signal of the gate.
+        """
+        if not self._n:
+            return []
+        fused = [0.0] * self._n
+        best = [0.0] * self._n
+        for q in queries:
+            scores = self.scores(q)
+            order = sorted(range(self._n), key=lambda i: (-scores[i], self.items[i].id))
+            for rank, i in enumerate(order, 1):
+                if scores[i] <= 0.0:
+                    break
+                fused[i] += 1.0 / (RRF_C + rank)
+                best[i] = max(best[i], scores[i])
+        order = sorted(range(self._n), key=lambda i: (-fused[i], self.items[i].id))
+        return [(self.items[i], best[i]) for i in order[:k] if fused[i] > 0.0]
+
+    def retrieve(self, s: Scenario, k: int = 5, mode: str = "fused") -> List[Tuple[KnowledgeItem, float]]:
+        if mode == "single":
+            return self.search(scenario_query(s), k)
+        if mode == "fused":
+            return self.search_fused(scenario_queries(s), k)
+        raise ValueError("unknown retrieval mode: %r" % mode)
