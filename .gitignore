@@ -1,0 +1,37 @@
+# 密钥与本地配置
+.env
+.env.*
+!.env.example
+*_api.txt
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 注意：results/raw/ 需要提交，不要忽略
+
+# build artefacts
+*.egg-info/
+build/
+dist/
+
+# demo interface calls are local only
+results/raw/app-*.jsonl
+results/raw/mock-*.jsonl
+results/runs/mock-*/
+results/tables/*mock-*.md
+
+# notes and working documents stay local; only the top-level README is published
+*.md
+!/README.md
