@@ -1,0 +1,13 @@
+{
+  "tau_conf": 0.0,
+  "tau_ret": 0.0,
+  "selected_on_run": "dev-raw-20260930-a",
+  "selected_on_split": "dev",
+  "system": "rag",
+  "rule": "max answered accuracy subject to abstain rate <= 0.25",
+  "selected_at": "2026-09-29T19:25:26+08:00",
+  "dev_abstain_rate": 0.0,
+  "dev_answered_accuracy": 1.0,
+  "dev_abstained_would_be_wrong": null,
+  "n": 40
+}
