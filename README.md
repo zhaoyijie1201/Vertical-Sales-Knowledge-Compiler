@@ -11,7 +11,45 @@ one customer scenario -> one retrieval step -> one model call -> one structured 
 The output is an action from a closed set of nine, a short rationale, the knowledge
 items it relied on, a confidence score, and a human-review flag.
 
-## What is compared
+## Contents
+
+- [1. Overview](#1-overview)
+  - [1.1 What is compared](#11-what-is-compared)
+  - [1.2 Documentation files](#12-documentation-files)
+- [2. Getting started](#2-getting-started)
+  - [2.1 Reproduce the tables without an API key](#21-reproduce-the-tables-without-an-api-key)
+  - [2.2 Run the tests](#22-run-the-tests)
+  - [2.3 Run it yourself](#23-run-it-yourself)
+- [3. Repository layout](#3-repository-layout)
+- [4. Product](#4-product)
+  - [4.1 Persona](#41-persona)
+  - [4.2 Input](#42-input)
+  - [4.3 Output](#43-output)
+  - [4.4 Architecture](#44-architecture)
+  - [4.5 Build or rent](#45-build-or-rent)
+  - [4.6 Metrics targeted and reached](#46-metrics-targeted-and-reached)
+- [5. Data](#5-data)
+  - [5.1 A scenario record](#51-a-scenario-record)
+  - [5.2 Dev set: 40 scenarios](#52-dev-set-40-scenarios)
+  - [5.3 Held-out set: 80 scenarios](#53-held-out-set-80-scenarios)
+  - [5.4 Knowledge base: 69 items](#54-knowledge-base-69-items)
+  - [5.5 Configuration-time study scenarios: 6](#55-configuration-time-study-scenarios-6)
+  - [5.6 Checks you can run](#56-checks-you-can-run)
+- [6. Evaluations](#6-evaluations)
+  - [6.1 Systems compared](#61-systems-compared)
+  - [6.2 The evals in this repository](#62-the-evals-in-this-repository)
+  - [6.3 Discipline](#63-discipline)
+  - [6.4 Discipline in detail](#64-discipline-in-detail)
+  - [6.5 Design decisions fixed before the held-out set existed](#65-design-decisions-fixed-before-the-held-out-set-existed)
+  - [6.6 Results](#66-results)
+  - [6.7 Critique of the evals](#67-critique-of-the-evals)
+  - [6.8 Tuning done on dev](#68-tuning-done-on-dev)
+- [7. FDE configuration-time study](#7-fde-configuration-time-study)
+- [8. Intended use and limits](#8-intended-use-and-limits)
+
+## 1. Overview
+
+### 1.1 What is compared
 
 | System | What it sees |
 |---|---|
@@ -22,7 +60,7 @@ items it relied on, a confidence score, and a human-review flag.
 Accuracy is exact match against the gold label, reported next to the
 majority-class baseline.
 
-## Documentation
+### 1.2 Documentation files
 
 | File | Contents |
 |---|---|
@@ -30,11 +68,13 @@ majority-class baseline.
 | [DATA.md](DATA.md) | Every data file: where it came from, how it was built and checked |
 | [EVALS.md](EVALS.md) | Every evaluation: what it measures, how to run it, results and critique |
 
-The full text of all three is also reproduced at the end of this README.
+The full text of all three is also reproduced in sections 4, 5 and 6 of this README.
 
 Each source file starts with a docstring describing what it does.
 
-## Reproduce the tables without an API key
+## 2. Getting started
+
+### 2.1 Reproduce the tables without an API key
 
 Every model call is logged under `results/raw/` and every prediction under
 `results/runs/`. The report is built from those files only.
@@ -52,7 +92,7 @@ Tested with Python 3.12 on Windows, in a fresh clone. On Windows, clone into a s
 such as `C:\vskc`: some installed packages have deep file paths that exceed the default
 260-character path limit when the folder is nested deeply.
 
-## Run the tests
+### 2.2 Run the tests
 
 ```bash
 pytest
@@ -60,7 +100,7 @@ pytest
 
 The tests use mock replies and small fixture files. They call no model and need no key.
 
-## Run it yourself
+### 2.3 Run it yourself
 
 1. Copy `.env.example` to `.env`. Set the API key and the three model slugs.
 2. Check the setup. This makes no model call.
@@ -106,7 +146,7 @@ The tests use mock replies and small fixture files. They call no model and need 
 Add `--mock` to `run_eval.py` to exercise the pipeline with deterministic fake replies.
 Mock runs are labeled as such and excluded from the summary.
 
-## Layout
+## 3. Repository layout
 
 ```
 src/vskc/        schema, retriever, prompts, model gateway, three systems, gate, metrics
@@ -124,155 +164,9 @@ results/tables/  generated tables
 tests/           unit tests and an end-to-end mock run
 ```
 
-## Evaluation discipline
+## 4. Product
 
-- **Labels before knowledge.** The 40 gold labels were fixed and committed before any
-  knowledge item existed. See the commit history.
-- **Held-out is run once.** `run_eval.py` refuses a second held-out run unless `--force`
-  is given with a reason, which is recorded in the run metadata.
-- **Thresholds are fixed first.** Held-out will not run until `results/gate.json` exists.
-  `tune_gate.py` refuses to tune on a held-out run.
-- **Leakage is measured.** Sentences that name an action or give advice are removed to
-  produce a stripped variant. Scores are reported before and after.
-- **Failures stay in the denominator.** A reply that fails validation twice counts as a
-  wrong answer.
-- **Generation never labels.** The scenario generator has no target action. Labels are
-  assigned afterwards, and every label is reviewed by a person before any system is run
-  on the file.
-- **Held-out labels were checked.** A second annotator, a model from a different vendor
-  than the model under test, labeled all 80 held-out scenarios independently with the
-  whole knowledge base in view. Agreement is 78.8 percent, Cohen's kappa 0.74. Each label
-  is marked `clear` or `judgment`, and accuracy is reported for both groups. Reproduce
-  with `python scripts/second_annotator.py --split heldout`.
-- **Same prompt for both model systems.** The generic LLM and the RAG system differ only
-  in whether the knowledge block is empty.
-
-## Design decisions fixed before the held-out set existed
-
-These were committed before any held-out scenario was generated.
-
-**Held-out composition.** 80 scenarios. At least 40 percent carry a customer requirement
-whose consequence depends on a fact that only the knowledge base states, such as a
-product's temperature limit or the minimum quantity for a custom housing. Each such
-requirement is generated in two versions, one the supplier can meet and one it cannot,
-so the fact changes the right action. The generator is told the customer's requirement
-only. It is never told what the supplier can do. Accuracy is reported separately for
-scenarios that depend on a supplier fact and for those that do not.
-
-Reason: on the 40 dev scenarios a model with no knowledge base already scores 95
-percent, and every one of its errors is a scenario that needs a supplier fact. A
-held-out set without such scenarios could not show whether the knowledge base matters.
-
-**Retrieval.** BM25 with two queries per scenario, the narrative and the pain point and
-objection phrases, merged by reciprocal rank fusion, top 5. On the 15 dev scenarios that
-need a supplier fact this retrieves the needed item for 15, against 12 for a single
-query. Reproduce with `python scripts/eval_retrieval.py`. The mode was chosen on dev,
-so that recall is optimistic.
-
-**Gate thresholds.** The RAG system made no wrong answer on dev, so thresholds cannot be
-learned from errors. They are set to the 10th percentile of the dev confidence and of
-the dev retrieval score: a case is escalated when the system is less confident, or the
-knowledge base matches less well, than on nine in ten dev cases. Values are in
-`results/gate.json`.
-
-**Ninth action.** `proceed_to_order` was added on 2026-09-30, after the held-out
-scenarios were generated and before any system was run on them. The first eight actions
-each address a barrier. Reading the generated scenarios showed that about one in eight has
-no barrier: requirements met, terms accepted, customer ready to order. Without a ninth
-action those scenarios would have no correct label. The 40 dev labels are unchanged, and
-dev was re-run with the nine-action prompt (prompt version p2) before thresholds were set.
-
-## FDE configuration-time study
-
-The problem statement claims the system reduces the effort of configuring a sales agent.
-Accuracy does not measure that, so I timed it.
-
-**Design.** Six new scenarios, none in dev or held-out, generated by
-`scripts/gen_config_study.py` into `data/study/config_study.jsonl`. Two groups of three,
-matched by type: one decision that depends on a supplier fact, one price objection, one
-other concern. For each scenario I wrote a sales-agent instruction meeting the same
-seven-point standard: next action, rationale, knowledge cited, what to tell the customer,
-what not to promise, whether to escalate, and a self-check against the scenario. Group A
-by hand with only the knowledge base text; group B with the web interface in live mode.
-The two conditions alternated (manual, system, manual, ...) so that growing familiarity
-was shared between them. Time ran on a stopwatch from the first word read to the last
-checklist item met.
-
-| Pair | By hand | With the system | Saved |
-|---|---|---|---|
-| Supplier fact (cs-01, cs-02) | 10.70 min | 5.57 min | 5.13 min |
-| Price objection (cs-03, cs-04) | 11.50 min | 4.43 min | 7.07 min |
-| Other concern (cs-05, cs-06) | 9.75 min | 4.57 min | 5.18 min |
-| **Mean** | **10.65 min** | **4.86 min** | **5.79 min, 54%** |
-
-All six instructions met the standard, and I adopted the system's recommendation in all
-three system cases. The model's response took 2.5 to 3.8 seconds, about 1 percent of the
-system condition; the rest was reading, entering the scenario, checking the cited
-evidence and writing the instruction. The RAG call cost about USD 0.016 per scenario.
-
-Records: `results/study/config_time_study.csv`; the model calls made in the system
-condition are in `results/study/system_condition_calls_20261002.jsonl`.
-
-Limits: six scenarios, so this shows a magnitude, not a tested difference. I am the
-developer, I know the knowledge base and the action set, and I judged the quality of my
-own instructions. The two groups used different scenarios, matched by type but not
-identical in difficulty. Two generated scenarios had one product detail corrected to
-match the knowledge base; the edits are recorded in `meta.edits`.
-
-## Build or rent
-
-| Layer | Choice | Own or rent |
-|---|---|---|
-| Interface | Single HTML page, no framework | own |
-| Serving | FastAPI JSON API, so the recommendation can be called by an execution-layer platform | own (FastAPI and Uvicorn are rented libraries) |
-| Orchestration | Python | own |
-| Knowledge schema | Pydantic models, closed action set | own |
-| Retrieval | BM25, implemented in `retriever.py` | own |
-| Strategy compiler | Prompt plus JSON Schema output | own |
-| Confidence gate | Deterministic rules | own |
-| Evaluation | Scripts in this repository | own |
-| Foundation model | Hosted model through OpenRouter, slug in `.env` | rent |
-| Prospecting, CRM, outreach | Existing sales platforms | rent, out of scope |
-
-## Intended use and limits
-
-Intended use: decision support for FDEs and sales implementation teams.
-
-Not for: contacting customers, negotiating prices, making binding commercial
-commitments, or replacing human approval of strategic decisions. The system has no tool
-that acts on any external system.
-
-Known limits:
-
-- All data is synthetic. No real customer data is used. Results say how the systems
-  behave on this data, not how they would behave in a live account.
-- Labels reflect one reviewer's judgement. On held-out, 50 of the 80 labels are judgement
-  calls where another action is defensible; the recorded alternative is in each record's
-  `meta`. Results on the 30 clear labels carry more weight.
-- Leakage was negligible: the filter removed 3 sentences from 3 held-out scenarios, and
-  neither model system changed its correctness on those three. The stripped run therefore
-  works as a second run on nearly unchanged input. Between the two runs the generic LLM
-  changed its answer on 5 of 80 scenarios and the RAG system on 4. Every change in
-  correctness, 3 for the generic LLM and 4 for RAG, happened on unchanged scenarios.
-  Differences of a few points between systems are within this run-to-run variation. The
-  first held-out run is the reported result; the second is reported alongside it.
-- Held-out scenarios are generated from independently sampled attributes, so some
-  combinations are unusual, and in five of them the generator stated a supplier-side
-  fact that conflicts with the knowledge base. They were kept as generated and flagged.
-- The silent failure to watch for is a recommendation that reads as commercially
-  plausible and is wrong for the customer's industry. The gate escalates low-confidence
-  and uncovered cases, and the report states how many escalated cases would have been
-  wrong.
-- Knowledge text is treated as data. The prompt tells the model not to follow
-  instructions inside it, and the output is restricted to the closed action set.
-
----
-
-<!-- full documentation below: copied verbatim from PRODUCT.md, DATA.md and EVALS.md -->
-
-## Product documentation
-
-### Persona
+### 4.1 Persona
 
 **Wei, a Forward-Deployed Engineer** at an industrial sensor supplier. She is setting up an AI
 sales agent for a new account and has a pile of call notes, a product catalogue and the
@@ -285,7 +179,7 @@ What changes when the system works: she pastes the customer situation, gets a re
 action with the facts it rests on, checks the cited facts, and writes the instruction. In a
 timed study this took 4.9 minutes per scenario instead of 10.7 by hand.
 
-### Input
+### 4.2 Input
 
 One customer scenario:
 
@@ -299,7 +193,7 @@ One customer scenario:
 | `pain_points` | short phrases, may be empty |
 | `objections` | short phrases, may be empty |
 
-### Output
+### 4.3 Output
 
 | Field | Example |
 |---|---|
@@ -312,7 +206,7 @@ One customer scenario:
 The action set is closed, so a recommendation is either right or wrong against a gold label;
 no model is needed to grade it.
 
-### Architecture
+### 4.4 Architecture
 
 ```mermaid
 flowchart LR
@@ -353,7 +247,22 @@ Text version:
 The generic-LLM system is the same pipeline with an empty knowledge block. The three systems
 share one input and one output type, so they can be compared directly.
 
-### Metrics targeted and reached
+### 4.5 Build or rent
+
+| Layer | Choice | Own or rent |
+|---|---|---|
+| Interface | Single HTML page, no framework | own |
+| Serving | FastAPI JSON API, so the recommendation can be called by an execution-layer platform | own (FastAPI and Uvicorn are rented libraries) |
+| Orchestration | Python | own |
+| Knowledge schema | Pydantic models, closed action set | own |
+| Retrieval | BM25, implemented in `retriever.py` | own |
+| Strategy compiler | Prompt plus JSON Schema output | own |
+| Confidence gate | Deterministic rules | own |
+| Evaluation | Scripts in this repository | own |
+| Foundation model | Hosted model through OpenRouter, slug in `.env` | rent |
+| Prospecting, CRM, outreach | Existing sales platforms | rent, out of scope |
+
+### 4.6 Metrics targeted and reached
 
 Targets were written down in the project plan on 2026-09-29, before any held-out scenario
 existed. The problem statement left the size of the margin over the generic LLM to be decided
@@ -369,9 +278,7 @@ after a pilot; no numeric margin was fixed, so none is claimed.
 
 Details: [EVALS.md](EVALS.md). Data: [DATA.md](DATA.md).
 
----
-
-## Data
+## 5. Data
 
 All data in this repository is synthetic. There is no real customer, person or company in it.
 Every file is JSONL: one JSON object per line.
@@ -387,7 +294,7 @@ Every file is JSONL: one JSON object per line.
 | `data/knowledge/playbook.jsonl` | 49 | Sales policies and sales practice | Retrieved by the RAG system |
 | `data/study/config_study.jsonl` | 6 | Unlabeled scenarios for the configuration-time study | Timing, not accuracy |
 
-### A scenario record
+### 5.1 A scenario record
 
 ```json
 {
@@ -409,7 +316,7 @@ Every file is JSONL: one JSON object per line.
 (`Scenario.without_label()` in `src/vskc/schema.py`). The rule baseline reads only the
 structured fields, never the narrative.
 
-### Dev set: 40 scenarios
+### 5.2 Dev set: 40 scenarios
 
 - Drafted, revised once, and every label reviewed by me. Fixed and committed
   before any knowledge item existed (commit `a4dde59`), so the knowledge base could not be
@@ -425,7 +332,7 @@ structured fields, never the narrative.
 - The dev set cannot be regenerated from a script. It is a fixed, reviewed dataset; both
   the first draft and the revised version are in the repository.
 
-### Held-out set: 80 scenarios
+### 5.3 Held-out set: 80 scenarios
 
 Generated by `scripts/gen_scenarios.py`, then labeled and reviewed.
 
@@ -455,7 +362,7 @@ Known rough edges: the grid samples factors independently, so some combinations 
 in five narratives the generator stated a supplier fact that conflicts with the knowledge base
 (flagged in `meta.narrative_states_supplier_fact`, kept as generated).
 
-### Knowledge base: 69 items
+### 5.4 Knowledge base: 69 items
 
 Written after the dev labels were locked (commit `5f75df5`), for an invented supplier with
 plausible specifications.
@@ -470,13 +377,13 @@ Rules followed when writing it: state general principles and facts, never "in si
 Y"; do not paraphrase any label rationale (the highest word overlap with any rationale is
 0.19); cover more than the scenarios need, as a real catalogue would.
 
-### Configuration-time study scenarios: 6
+### 5.5 Configuration-time study scenarios: 6
 
 Generated by `scripts/gen_config_study.py` with a fixed design: two groups of three, matched
 by type. Unlabeled, because the study measures time. Two narratives had one product detail
 corrected to agree with the knowledge base; the edits are recorded in `meta.edits`.
 
-### Checks you can run
+### 5.6 Checks you can run
 
 ```bash
 python scripts/validate_data.py      # schema, ids, quotas
@@ -484,14 +391,12 @@ python scripts/leakage_check.py --split heldout
 python scripts/eval_retrieval.py     # recall of the needed knowledge items on dev
 ```
 
----
-
-## Evaluations
+## 6. Evaluations
 
 Every number below can be recomputed without an API key: `python scripts/report.py` reads
 the logged runs in `results/` and writes the tables to `results/tables/`.
 
-### 1. What is compared
+### 6.1 Systems compared
 
 | System | Sees |
 |---|---|
@@ -503,7 +408,7 @@ the logged runs in `results/` and writes the tables to `results/tables/`.
 The generic LLM and the RAG system use the same prompt; the knowledge block is the only
 difference (a test enforces this).
 
-### 2. The evals in this repository
+### 6.2 The evals in this repository
 
 | Eval | Question it answers | Script | Output |
 |---|---|---|---|
@@ -517,7 +422,7 @@ difference (a test enforces this).
 | Cost and latency | What does one recommendation cost? | `scripts/report.py` | T4 |
 | Configuration time | How long does an FDE take to write an agent instruction, by hand and with the system? | stopwatch; `results/study/` | README |
 
-### 3. Discipline
+### 6.3 Discipline
 
 - Labels before knowledge: dev labels committed before the knowledge base (`a4dde59`, then `5f75df5`).
 - Held-out labels committed before any system ran on them (`a694276`).
@@ -526,15 +431,73 @@ difference (a test enforces this).
 - A reply that fails validation twice counts as wrong.
 - Every model call, including failed attempts, is logged in `results/raw/`.
 
-### 4. Results
+### 6.4 Discipline in detail
 
-#### Dev, 40 scenarios (tuning only)
+- **Labels before knowledge.** The 40 gold labels were fixed and committed before any
+  knowledge item existed. See the commit history.
+- **Held-out is run once.** `run_eval.py` refuses a second held-out run unless `--force`
+  is given with a reason, which is recorded in the run metadata.
+- **Thresholds are fixed first.** Held-out will not run until `results/gate.json` exists.
+  `tune_gate.py` refuses to tune on a held-out run.
+- **Leakage is measured.** Sentences that name an action or give advice are removed to
+  produce a stripped variant. Scores are reported before and after.
+- **Failures stay in the denominator.** A reply that fails validation twice counts as a
+  wrong answer.
+- **Generation never labels.** The scenario generator has no target action. Labels are
+  assigned afterwards, and every label is reviewed by a person before any system is run
+  on the file.
+- **Held-out labels were checked.** A second annotator, a model from a different vendor
+  than the model under test, labeled all 80 held-out scenarios independently with the
+  whole knowledge base in view. Agreement is 78.8 percent, Cohen's kappa 0.74. Each label
+  is marked `clear` or `judgment`, and accuracy is reported for both groups. Reproduce
+  with `python scripts/second_annotator.py --split heldout`.
+- **Same prompt for both model systems.** The generic LLM and the RAG system differ only
+  in whether the knowledge block is empty.
+
+### 6.5 Design decisions fixed before the held-out set existed
+
+These were committed before any held-out scenario was generated.
+
+**Held-out composition.** 80 scenarios. At least 40 percent carry a customer requirement
+whose consequence depends on a fact that only the knowledge base states, such as a
+product's temperature limit or the minimum quantity for a custom housing. Each such
+requirement is generated in two versions, one the supplier can meet and one it cannot,
+so the fact changes the right action. The generator is told the customer's requirement
+only. It is never told what the supplier can do. Accuracy is reported separately for
+scenarios that depend on a supplier fact and for those that do not.
+
+Reason: on the 40 dev scenarios a model with no knowledge base already scores 95
+percent, and every one of its errors is a scenario that needs a supplier fact. A
+held-out set without such scenarios could not show whether the knowledge base matters.
+
+**Retrieval.** BM25 with two queries per scenario, the narrative and the pain point and
+objection phrases, merged by reciprocal rank fusion, top 5. On the 15 dev scenarios that
+need a supplier fact this retrieves the needed item for 15, against 12 for a single
+query. Reproduce with `python scripts/eval_retrieval.py`. The mode was chosen on dev,
+so that recall is optimistic.
+
+**Gate thresholds.** The RAG system made no wrong answer on dev, so thresholds cannot be
+learned from errors. They are set to the 10th percentile of the dev confidence and of
+the dev retrieval score: a case is escalated when the system is less confident, or the
+knowledge base matches less well, than on nine in ten dev cases. Values are in
+`results/gate.json`.
+
+**Ninth action.** `proceed_to_order` was added on 2026-09-30, after the held-out
+scenarios were generated and before any system was run on them. The first eight actions
+each address a barrier. Reading the generated scenarios showed that about one in eight has
+no barrier: requirements met, terms accepted, customer ready to order. Without a ninth
+action those scenarios would have no correct label. The 40 dev labels are unchanged, and
+dev was re-run with the nine-action prompt (prompt version p2) before thresholds were set.
+
+### 6.6 Results
+
+#### 6.6.1 Dev, 40 scenarios (tuning only)
 
 | Majority | Rule | Generic LLM | RAG |
 |---|---|---|---|
 | 12.5% | 45.0% | 95.0% | 100% |
 
-#### Held-out, 80 scenarios (run `heldout-raw-20261002`)
+#### 6.6.2 Held-out, 80 scenarios (run `heldout-raw-20261002`)
 
 | System | Accuracy | 95% CI |
 |---|---|---|
@@ -553,19 +516,19 @@ difference (a test enforces this).
 
 Both model systems beat the rule baseline (p < 0.001).
 
-#### Gate on held-out
+#### 6.6.3 Gate on held-out
 
 | Abstain rate | Escalated cases that would be wrong | Accuracy on answered cases |
 |---|---|---|
 | 81.3% (65/80) | 26.2% (17/65) | 100% (15/15) |
 
-#### Retrieval recall on dev
+#### 6.6.4 Retrieval recall on dev
 
 | k = 3 | k = 5 | k = 8 |
 |---|---|---|
 | single query 11/15, fused 14/15 | single 12/15, fused 15/15 | single 14/15, fused 15/15 |
 
-### 5. Critique of the evals
+### 6.7 Critique of the evals
 
 - **Small samples.** 80 held-out scenarios give 95% intervals about 18 points wide. The
   overall RAG advantage of 6 points is inside the noise; only the clear-label subset shows a
@@ -591,7 +554,7 @@ Both model systems beat the rule baseline (p < 0.001).
 - **Self-timed study.** The configuration-time study has six scenarios, timed and judged by
   the developer.
 
-### 6. Tuning done on dev
+### 6.8 Tuning done on dev
 
 | Change | Evidence | Run |
 |---|---|---|
@@ -599,3 +562,72 @@ Both model systems beat the rule baseline (p < 0.001).
 | Revised dev narratives | Generic LLM fell from 100% to 95%; narratives no longer gave the answer away | archive vs current gold |
 | Ninth action `proceed_to_order` | About ten held-out scenarios had no open barrier; added before the held-out run, dev re-run unchanged | `dev-raw-20260930-c` |
 | Gate rule: percentile instead of accuracy | RAG made no error on dev, so accuracy-based thresholds could not be learned | `results/gate.json` |
+
+## 7. FDE configuration-time study
+
+The problem statement claims the system reduces the effort of configuring a sales agent.
+Accuracy does not measure that, so I timed it.
+
+**Design.** Six new scenarios, none in dev or held-out, generated by
+`scripts/gen_config_study.py` into `data/study/config_study.jsonl`. Two groups of three,
+matched by type: one decision that depends on a supplier fact, one price objection, one
+other concern. For each scenario I wrote a sales-agent instruction meeting the same
+seven-point standard: next action, rationale, knowledge cited, what to tell the customer,
+what not to promise, whether to escalate, and a self-check against the scenario. Group A
+by hand with only the knowledge base text; group B with the web interface in live mode.
+The two conditions alternated (manual, system, manual, ...) so that growing familiarity
+was shared between them. Time ran on a stopwatch from the first word read to the last
+checklist item met.
+
+| Pair | By hand | With the system | Saved |
+|---|---|---|---|
+| Supplier fact (cs-01, cs-02) | 10.70 min | 5.57 min | 5.13 min |
+| Price objection (cs-03, cs-04) | 11.50 min | 4.43 min | 7.07 min |
+| Other concern (cs-05, cs-06) | 9.75 min | 4.57 min | 5.18 min |
+| **Mean** | **10.65 min** | **4.86 min** | **5.79 min, 54%** |
+
+All six instructions met the standard, and I adopted the system's recommendation in all
+three system cases. The model's response took 2.5 to 3.8 seconds, about 1 percent of the
+system condition; the rest was reading, entering the scenario, checking the cited
+evidence and writing the instruction. The RAG call cost about USD 0.016 per scenario.
+
+Records: `results/study/config_time_study.csv`; the model calls made in the system
+condition are in `results/study/system_condition_calls_20261002.jsonl`.
+
+Limits: six scenarios, so this shows a magnitude, not a tested difference. I am the
+developer, I know the knowledge base and the action set, and I judged the quality of my
+own instructions. The two groups used different scenarios, matched by type but not
+identical in difficulty. Two generated scenarios had one product detail corrected to
+match the knowledge base; the edits are recorded in `meta.edits`.
+
+## 8. Intended use and limits
+
+Intended use: decision support for FDEs and sales implementation teams.
+
+Not for: contacting customers, negotiating prices, making binding commercial
+commitments, or replacing human approval of strategic decisions. The system has no tool
+that acts on any external system.
+
+Known limits:
+
+- All data is synthetic. No real customer data is used. Results say how the systems
+  behave on this data, not how they would behave in a live account.
+- Labels reflect one reviewer's judgement. On held-out, 50 of the 80 labels are judgement
+  calls where another action is defensible; the recorded alternative is in each record's
+  `meta`. Results on the 30 clear labels carry more weight.
+- Leakage was negligible: the filter removed 3 sentences from 3 held-out scenarios, and
+  neither model system changed its correctness on those three. The stripped run therefore
+  works as a second run on nearly unchanged input. Between the two runs the generic LLM
+  changed its answer on 5 of 80 scenarios and the RAG system on 4. Every change in
+  correctness, 3 for the generic LLM and 4 for RAG, happened on unchanged scenarios.
+  Differences of a few points between systems are within this run-to-run variation. The
+  first held-out run is the reported result; the second is reported alongside it.
+- Held-out scenarios are generated from independently sampled attributes, so some
+  combinations are unusual, and in five of them the generator stated a supplier-side
+  fact that conflicts with the knowledge base. They were kept as generated and flagged.
+- The silent failure to watch for is a recommendation that reads as commercially
+  plausible and is wrong for the customer's industry. The gate escalates low-confidence
+  and uncovered cases, and the report states how many escalated cases would have been
+  wrong.
+- Knowledge text is treated as data. The prompt tells the model not to follow
+  instructions inside it, and the output is restricted to the closed action set.
