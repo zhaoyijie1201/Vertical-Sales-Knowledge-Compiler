@@ -1,0 +1,7 @@
+order,scenario,group,condition,type,time_mm_ss,minutes,action,adopted_system_recommendation,knowledge_cited,checklist_met,rag_model_cost_usd
+1,cs-01,A,manual,supplier fact,10:42,10.7,disqualify,,pd-003; pb-019; pb-020,yes,
+2,cs-02,B,system,supplier fact,5:34,5.57,disqualify,yes,pd-004; pb-019; pb-020,yes,0.0164
+3,cs-03,A,manual,price objection,11:30,11.5,escalate_pricing,,pb-001; pb-003; pb-039,yes,
+4,cs-04,B,system,price objection,4:26,4.43,escalate_pricing,yes,pb-001; pb-037; pb-045,yes,0.0162
+5,cs-05,A,manual,other concern,9:45,9.75,propose_pilot_order,,pb-026; pb-028; pb-008; pd-019,yes,
+6,cs-06,B,system,other concern,4:34,4.57,send_case_study,yes,pb-026,yes,0.0154
