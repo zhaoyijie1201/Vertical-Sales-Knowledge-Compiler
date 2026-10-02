@@ -1,3 +1,5 @@
+"""Unit tests for the core package: schema, retrieval, gate, rule baseline, prompts,
+JSON parsing, metrics, leakage detection and the generation grid. No model is called."""
 import pytest
 from pydantic import ValidationError
 

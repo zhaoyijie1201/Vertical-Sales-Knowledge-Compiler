@@ -22,6 +22,16 @@ items it relied on, a confidence score, and a human-review flag.
 Accuracy is exact match against the gold label, reported next to the
 majority-class baseline.
 
+## Documentation
+
+| File | Contents |
+|---|---|
+| [PRODUCT.md](PRODUCT.md) | Persona, input, output, architecture diagram, metrics targeted and reached |
+| [DATA.md](DATA.md) | Every data file: where it came from, how it was built and checked |
+| [EVALS.md](EVALS.md) | Every evaluation: what it measures, how to run it, results and critique |
+
+Each source file starts with a docstring describing what it does.
+
 ## Reproduce the tables without an API key
 
 Every model call is logged under `results/raw/` and every prediction under
@@ -35,6 +45,10 @@ python scripts/report.py
 ```
 
 Tables are written to `results/tables/`.
+
+Tested with Python 3.12 on Windows, in a fresh clone. On Windows, clone into a short path
+such as `C:\vskc`: some installed packages have deep file paths that exceed the default
+260-character path limit when the folder is nested deeply.
 
 ## Run the tests
 

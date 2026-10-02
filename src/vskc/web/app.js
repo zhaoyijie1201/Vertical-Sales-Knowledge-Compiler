@@ -1,3 +1,13 @@
+/*
+ * Front end of the web interface, served by src/vskc/api.py.
+ *
+ * Workbench: pick a held-out, dev or custom scenario and see the three systems side by side,
+ *   replayed from the evaluation run (no model call) or called live.
+ * Results:   held-out accuracy, subsets, paired tests, the gate, cost, run-to-run variation.
+ * About:     pipeline, compared systems, the nine actions, intended use and limits.
+ *
+ * Plain JavaScript, no build step. All data comes from the JSON API under /api.
+ */
 "use strict";
 
 /* ====================================================================== state */

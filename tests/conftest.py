@@ -1,3 +1,5 @@
+"""Shared test fixtures: six demo scenarios, five demo knowledge items, and a guard that
+keeps every test in mock mode so no test calls a model or reads the real API key."""
 import sys
 from pathlib import Path
 
