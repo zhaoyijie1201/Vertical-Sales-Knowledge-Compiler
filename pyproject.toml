@@ -14,13 +14,21 @@ dependencies = [
     "pandas>=2.0",
     "tabulate>=0.9",
     "streamlit>=1.36",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "httpx>=0.27"]
+
+[project.scripts]
+vskc-web = "vskc.api:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+vskc = ["web/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vertical Sales Knowledge Compiler</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <div class="brand-name">Vertical Sales Knowledge Compiler</div>
+        <div class="brand-sub">Next-best-action decision support for Forward-Deployed Engineers</div>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" role="tab" data-view="workbench" aria-selected="true">Workbench</button>
+      <button class="tab" role="tab" data-view="results" aria-selected="false">Results</button>
+      <button class="tab" role="tab" data-view="about" aria-selected="false">About</button>
+    </nav>
+    <div class="topbar-meta" id="topbar-meta"></div>
+  </header>
+
+  <main>
+    <!-- ================================================================ workbench -->
+    <section class="view is-active" id="view-workbench">
+      <aside class="sidebar">
+        <div class="seg" role="radiogroup" aria-label="Scenario source" id="source-seg">
+          <button data-source="heldout" class="is-on">Held-out</button>
+          <button data-source="dev">Dev</button>
+          <button data-source="custom">Custom</button>
+        </div>
+        <div class="filters" id="filters">
+          <input type="search" id="search" placeholder="Search scenarios" aria-label="Search scenarios">
+          <div class="filter-row">
+            <select id="filter-label" aria-label="Filter by gold label"><option value="">All gold labels</option></select>
+          </div>
+          <div class="filter-row chips">
+            <label class="chip-toggle"><input type="checkbox" id="filter-fact"> Needs supplier fact</label>
+            <label class="chip-toggle"><input type="checkbox" id="filter-clear"> Clear label</label>
+            <label class="chip-toggle"><input type="checkbox" id="filter-disagree"> Systems disagree</label>
+          </div>
+          <label class="switch-row"><input type="checkbox" id="hide-answers"> Hide gold labels</label>
+        </div>
+        <div class="list-head" id="list-head"><span id="list-count"></span><span class="legend-mini"></span></div>
+        <div class="custom-hint" id="custom-hint" hidden>
+          <p><b>Custom scenario.</b> Write what the customer said, did or documented. Leave out what our products can or cannot do: the knowledge base supplies that.</p>
+          <p class="muted">Live mode calls the model under test. Mock mode shows the interface without a model call.</p>
+        </div>
+        <ul class="scenario-list" id="scenario-list" aria-label="Scenarios"></ul>
+      </aside>
+
+      <div class="workspace">
+        <div class="empty" id="empty-state">
+          <h2>Pick a scenario</h2>
+          <p>Choose a held-out scenario on the left to see what each system recommended in the evaluation run,
+            or switch to <strong>Custom</strong> to write your own.</p>
+        </div>
+
+        <article class="card scenario-card" id="scenario-card" hidden>
+          <div class="card-head">
+            <div>
+              <div class="eyebrow" id="sc-id"></div>
+              <h2 class="sc-title" id="sc-title"></h2>
+            </div>
+            <div class="gold" id="sc-gold"></div>
+          </div>
+          <div class="facts" id="sc-facts"></div>
+          <p class="narrative" id="sc-narrative"></p>
+          <div class="two-col">
+            <div><div class="label-sm">Pain points</div><ul class="bullets" id="sc-pain"></ul></div>
+            <div><div class="label-sm">Objections</div><ul class="bullets" id="sc-obj"></ul></div>
+          </div>
+          <div class="gold-detail" id="sc-gold-detail"></div>
+        </article>
+
+        <form class="card custom-card" id="custom-card" hidden>
+          <div class="card-head"><div><div class="eyebrow">Custom scenario</div><h2 class="sc-title">Describe the account</h2></div></div>
+          <label class="field"><span>Narrative</span>
+            <textarea id="cu-narrative" rows="6" required placeholder="What the customer said, did or documented."></textarea></label>
+          <div class="grid4">
+            <label class="field"><span>Sales stage</span><select id="cu-stage"></select></label>
+            <label class="field"><span>Customer size</span>
+              <select id="cu-size"><option>small</option><option selected>medium</option><option>large</option></select></label>
+            <label class="field check"><input type="checkbox" id="cu-export"> <span>Export oriented</span></label>
+            <label class="field check"><input type="checkbox" id="cu-incumbent"> <span>Has incumbent supplier</span></label>
+          </div>
+          <div class="two-col">
+            <label class="field"><span>Pain points, one per line</span><textarea id="cu-pain" rows="3"></textarea></label>
+            <label class="field"><span>Objections, one per line</span><textarea id="cu-obj" rows="3"></textarea></label>
+          </div>
+          <div class="examples" id="cu-examples"></div>
+        </form>
+
+        <div class="runbar" id="runbar" hidden>
+          <div class="seg" role="radiogroup" aria-label="Mode" id="mode-seg">
+            <button data-mode="recorded" class="is-on" title="Replay the evaluation run. No model call.">Recorded run</button>
+            <button data-mode="live" title="Call the model now.">Live model</button>
+            <button data-mode="mock" title="Deterministic fake replies.">Mock</button>
+          </div>
+          <div class="mode-note" id="mode-note"></div>
+          <button class="btn-primary" id="run-btn" type="button">Show recommendations</button>
+        </div>
+
+        <div class="error-banner" id="error-banner" role="alert" hidden></div>
+        <div class="outputs" id="outputs"></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ results -->
+    <section class="view" id="view-results">
+      <div class="results-wrap" id="results-wrap">
+        <div class="loading">Loading results…</div>
+      </div>
+    </section>
+
+    <!-- ================================================================ about -->
+    <section class="view" id="view-about">
+      <div class="about">
+        <div class="card">
+          <h2>What it does</h2>
+          <p>An FDE configuring a sales agent for an industrial sensor supplier describes a customer situation.
+            The system retrieves the relevant product records, sales policies and practice from a knowledge base,
+            and a model recommends one next-best action from a closed set of nine, with a rationale, the evidence it
+            relied on and a confidence score. A deterministic gate sends uncertain or poorly covered cases to a person.</p>
+          <ol class="pipeline">
+            <li><b>Scenario</b><span>narrative and structured fields</span></li>
+            <li><b>Retrieve</b><span>BM25, two queries fused, top 5</span></li>
+            <li><b>Recommend</b><span>one model call, JSON schema output</span></li>
+            <li><b>Validate</b><span>action in the set, evidence was retrieved</span></li>
+            <li><b>Gate</b><span>pass, or human review with a reason</span></li>
+          </ol>
+        </div>
+        <div class="card">
+          <h2>What is compared</h2>
+          <table class="tbl">
+            <thead><tr><th>System</th><th>Sees</th></tr></thead>
+            <tbody>
+              <tr><td><span class="sys-key k-rule"></span>Rule-based baseline</td><td>Structured fields only. No model.</td></tr>
+              <tr><td><span class="sys-key k-llm"></span>Generic LLM</td><td>The scenario, with an empty knowledge block.</td></tr>
+              <tr><td><span class="sys-key k-rag"></span>Vertical RAG + LLM</td><td>The scenario and the five retrieved knowledge items.</td></tr>
+            </tbody>
+          </table>
+          <p class="muted">The two model systems share one prompt. The only difference is the knowledge block.</p>
+        </div>
+        <div class="card">
+          <h2>Actions</h2>
+          <dl class="actions" id="action-defs"></dl>
+        </div>
+        <div class="card">
+          <h2>Intended use and limits</h2>
+          <p><b>Intended use.</b> Decision support for FDEs and sales implementation teams.</p>
+          <p><b>Not for.</b> Contacting customers, negotiating prices, making binding commitments, or replacing human
+            approval of strategic decisions. Nothing here writes to any external system.</p>
+          <ul class="bullets">
+            <li>All data is synthetic. Results describe behaviour on this data, not on a live account.</li>
+            <li>Labels reflect one reviewer's judgement. Many held-out cases have a defensible alternative.</li>
+            <li>Confidence thresholds chosen on the dev set did not transfer to the held-out set.</li>
+            <li>The silent failure to watch for: a recommendation that reads as plausible and is wrong for the industry.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div><div class="eyebrow" id="drawer-kind"></div><h3 id="drawer-title"></h3></div>
+      <button class="icon-btn" id="drawer-close" aria-label="Close">×</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

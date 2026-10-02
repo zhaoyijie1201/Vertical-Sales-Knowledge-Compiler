@@ -70,11 +70,22 @@ The tests use mock replies and small fixture files. They call no model and need 
    python scripts/report.py
    ```
 
-4. Demo interface.
+4. Web interface.
 
    ```bash
-   streamlit run src/vskc/app.py
+   python -m vskc.api
    ```
+
+   Open http://127.0.0.1:8000. The **Workbench** replays what each system answered in the
+   evaluation run (no model call, no cost), or calls the model live on a held-out, dev or
+   custom scenario. Each answer shows the action, the rationale, the confidence, the gate
+   decision and the cited knowledge items. **Results** shows the held-out accuracy,
+   subsets, paired tests, the gate and cost. The page is served by FastAPI and is plain
+   HTML and JavaScript with no build step; the JSON API is documented at `/api/docs`.
+   Deep links such as `/#heldout/ho-022`, `/#results` and `/#heldout/ho-022/hide` (gold
+   labels hidden) are useful for demonstrations.
+
+   A simpler Streamlit page is kept as a fallback: `streamlit run src/vskc/app.py`.
 
 Add `--mock` to `run_eval.py` to exercise the pipeline with deterministic fake replies.
 Mock runs are labeled as such and excluded from the summary.
@@ -83,6 +94,7 @@ Mock runs are labeled as such and excluded from the summary.
 
 ```
 src/vskc/        schema, retriever, prompts, model gateway, three systems, gate, metrics
+src/vskc/api.py  FastAPI app: JSON API and the web page in src/vskc/web/
 scripts/         data validation, leakage check, evaluation, threshold tuning, report, generation
 data/gold/       40 labeled scenarios, fixed before the knowledge base
 data/knowledge/  playbook, product records, customer SOPs, past outcomes
@@ -156,7 +168,8 @@ dev was re-run with the nine-action prompt (prompt version p2) before thresholds
 
 | Layer | Choice | Own or rent |
 |---|---|---|
-| Interface | Streamlit | own |
+| Interface | Single HTML page, no framework | own |
+| Serving | FastAPI JSON API, so the recommendation can be called by an execution-layer platform | own (FastAPI and Uvicorn are rented libraries) |
 | Orchestration | Python | own |
 | Knowledge schema | Pydantic models, closed action set | own |
 | Retrieval | BM25, implemented in `retriever.py` | own |
@@ -181,6 +194,13 @@ Known limits:
 - Labels reflect one reviewer's judgement. On held-out, 50 of the 80 labels are judgement
   calls where another action is defensible; the recorded alternative is in each record's
   `meta`. Results on the 30 clear labels carry more weight.
+- Leakage was negligible: the filter removed 3 sentences from 3 held-out scenarios, and
+  neither model system changed its correctness on those three. The stripped run therefore
+  works as a second run on nearly unchanged input. Between the two runs the generic LLM
+  changed its answer on 5 of 80 scenarios and the RAG system on 4. Every change in
+  correctness, 3 for the generic LLM and 4 for RAG, happened on unchanged scenarios.
+  Differences of a few points between systems are within this run-to-run variation. The
+  first held-out run is the reported result; the second is reported alongside it.
 - Held-out scenarios are generated from independently sampled attributes, so some
   combinations are unusual, and in five of them the generator stated a supplier-side
   fact that conflicts with the knowledge base. They were kept as generated and flagged.

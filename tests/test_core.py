@@ -300,3 +300,13 @@ def test_cohen_kappa():
     assert 0 < cohen_kappa(["a", "a", "b", "b", "c"], ["a", "a", "b", "c", "c"]) < 1
     with pytest.raises(ValueError):
         cohen_kappa(["a"], [])
+
+
+def test_mcnemar_exact():
+    from vskc.metrics import mcnemar_exact
+
+    r = mcnemar_exact([True] * 8 + [False] * 2, [False] * 8 + [True] * 2)
+    assert (r["only_a"], r["only_b"]) == (8, 2)
+    assert 0.1 < r["p_value"] < 0.12
+    assert mcnemar_exact([True, False], [True, False])["p_value"] == 1.0
+    assert mcnemar_exact([True] * 8, [False] * 8)["p_value"] < 0.01

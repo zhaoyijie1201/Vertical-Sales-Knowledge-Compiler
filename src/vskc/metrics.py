@@ -132,3 +132,21 @@ def cohen_kappa(a: Sequence[str], b: Sequence[str]) -> float:
     if expected >= 1.0:
         return 1.0
     return (observed - expected) / (1.0 - expected)
+
+
+def mcnemar_exact(a_correct: Sequence[bool], b_correct: Sequence[bool]) -> Dict[str, Any]:
+    """Exact two-sided McNemar test for two systems answering the same cases.
+
+    Only the discordant cases count: those one system got right and the other wrong.
+    """
+    if len(a_correct) != len(b_correct):
+        raise ValueError("both systems must answer the same cases")
+    only_a = sum(1 for x, y in zip(a_correct, b_correct) if x and not y)
+    only_b = sum(1 for x, y in zip(a_correct, b_correct) if y and not x)
+    n = only_a + only_b
+    if n == 0:
+        p = 1.0
+    else:
+        tail = sum(math.comb(n, k) for k in range(0, min(only_a, only_b) + 1)) / 2 ** n
+        p = min(1.0, 2 * tail)
+    return {"n": len(a_correct), "only_a": only_a, "only_b": only_b, "p_value": p}

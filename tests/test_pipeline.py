@@ -147,3 +147,55 @@ def test_labeling_round_trip(tmp_path, scenarios_path, monkeypatch):
     assert after[0].meta["review_status"] == "human_reviewed"
     assert [s.narrative for s in after] == [r["narrative"] for r in rows]
     assert sum(1 for s in after if s.label) == 1
+
+
+def test_retry_errors_reruns_only_service_failures(tmp_path, scenarios_path, knowledge_dir):
+    code, results = run_mock_eval(tmp_path, scenarios_path, knowledge_dir)
+    assert code == 0
+    run_dir = results / "runs" / "mock-test"
+    rows = read_jsonl(run_dir / "predictions.jsonl")
+    service = "APIStatusError: Error code: 402 - no credit"
+    invalid = "ValidationError: bad reply"
+    for r in rows:
+        if r["system"] == "llm" and r["scenario_id"] in ("demo-001", "demo-002"):
+            r.update(action=None, correct=False, confidence=None, error=service)
+        if r["system"] == "rag" and r["scenario_id"] == "demo-003":
+            r.update(action=None, correct=False, confidence=None, error=invalid)
+    with open(run_dir / "predictions.jsonl", "w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+
+    assert run_eval.main(["--resume", "mock-test", "--retry-errors", "--results-dir", str(results)]) == 0
+    after = read_jsonl(run_dir / "predictions.jsonl")
+    assert len(after) == len(rows)
+    assert not any(run_eval.is_service_error(r["error"]) for r in after)
+    assert any(r["error"] == invalid for r in after)
+    meta = json.loads((run_dir / "run_meta.json").read_text(encoding="utf-8"))
+    assert meta["retries"][0]["rows"] == 2
+    assert len(read_jsonl(run_dir / "retried_rows.jsonl")) == 2
+
+
+def test_resume_refuses_changed_inputs(tmp_path, scenarios_path, knowledge_dir):
+    import shutil
+
+    data = tmp_path / "copy.jsonl"
+    shutil.copy(scenarios_path, data)
+    results = tmp_path / "results"
+    assert run_eval.main(["--split", "custom", "--scenarios", str(data), "--knowledge-dir", str(knowledge_dir),
+                          "--results-dir", str(results), "--mock", "--run-id", "mock-x", "--limit", "2"]) == 0
+    data.write_text(data.read_text(encoding="utf-8").replace("mid-sized", "mid sized"), encoding="utf-8")
+    meta_path = results / "runs" / "mock-x" / "run_meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["scenarios_file"] = str(data)
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    assert run_eval.main(["--resume", "mock-x", "--results-dir", str(results)]) != 0
+
+
+def test_service_error_classification():
+    assert run_eval.is_service_error("APIStatusError: Error code: 402 - x")
+    assert run_eval.is_service_error("RateLimitError: Error code: 429")
+    assert not run_eval.is_service_error("ValidationError: 1 validation error")
+    assert not run_eval.is_service_error("ValueError: no JSON object in reply")
+    assert not run_eval.is_service_error(None)
+    assert run_eval.FATAL_SERVICE_ERROR.search("APIStatusError: Error code: 402 - x")
+    assert not run_eval.FATAL_SERVICE_ERROR.search("RateLimitError: Error code: 429")

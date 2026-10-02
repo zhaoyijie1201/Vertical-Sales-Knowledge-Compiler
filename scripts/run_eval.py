@@ -4,6 +4,7 @@
     python scripts/run_eval.py --split dev --variant stripped
     python scripts/run_eval.py --split heldout
     python scripts/run_eval.py --resume heldout-raw-20261003-101500
+    python scripts/run_eval.py --resume heldout-raw-20261003-101500 --retry-errors
 
 Outputs
     results/runs/<run_id>/predictions.jsonl   one row per (system, scenario)
@@ -13,7 +14,15 @@ Outputs
 The held-out split is run once per variant. A second run is refused unless --force is
 given with --reason, and the reason is recorded. Thresholds must exist before held-out
 is run, so they cannot be chosen after seeing held-out results.
+
+A run stops at the first non-transient service error (no credit, invalid key, no access):
+continuing would only write rows without a recommendation. --resume continues the run.
+--retry-errors also re-runs the rows that failed with a service error. Rows where the
+model replied but the reply failed validation are kept: those are system errors and count
+as wrong answers. A resume refuses to continue when the scenarios, the knowledge base,
+the prompt or the model differ from the original run.
 """
+import re
 import argparse
 import json
 import platform
@@ -30,6 +39,18 @@ from vskc.prompts import PROMPT_VERSION
 from vskc.retriever import BM25Retriever
 from vskc.schema import Scenario
 from vskc.systems import SYSTEM_NAMES, SYSTEMS, Context, SystemOutput
+
+# Errors raised by the model provider's service, as opposed to a reply that failed validation.
+SERVICE_ERROR = re.compile(
+    r"^(APIStatusError|APIConnectionError|APITimeoutError|RateLimitError|InternalServerError|"
+    r"AuthenticationError|PermissionDeniedError|BadRequestError|NotFoundError|ConflictError|"
+    r"UnprocessableEntityError)\b")
+# Service errors that will not go away by retrying within the same run.
+FATAL_SERVICE_ERROR = re.compile(r"Error code: (401|402|403)\b")
+
+
+def is_service_error(error: Optional[str]) -> bool:
+    return bool(error) and bool(SERVICE_ERROR.match(error))
 
 
 def default_scenarios_path(split: str, variant: str) -> Path:
@@ -118,6 +139,8 @@ def parse_args(argv):
     p.add_argument("--limit", type=int, help="only the first N scenarios (dev and custom only)")
     p.add_argument("--run-id")
     p.add_argument("--resume", metavar="RUN_ID", help="continue an interrupted run")
+    p.add_argument("--retry-errors", action="store_true",
+                   help="with --resume: also re-run rows that failed with a service error")
     p.add_argument("--mock", action="store_true", help="no model calls; deterministic fake replies")
     p.add_argument("--force", action="store_true", help="allow a second held-out run")
     p.add_argument("--reason", help="why held-out is being run again; recorded in run_meta.json")
@@ -145,6 +168,8 @@ def main(argv=None) -> int:
         args.scenarios = paths.ROOT / resumed_meta["scenarios_file"]
         if not args.scenarios.exists():
             args.scenarios = Path(resumed_meta["scenarios_file"])
+    elif args.retry_errors:
+        return fail("--retry-errors needs --resume")
 
     systems = [x.strip() for x in args.systems.split(",") if x.strip()]
     unknown = [x for x in systems if x not in SYSTEMS]
@@ -206,9 +231,51 @@ def main(argv=None) -> int:
         return fail("run directory already exists: %s" % run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    done: Set[Tuple[str, str]] = set()
-    if pred_path.exists():
-        done = {(r["system"], r["scenario_id"]) for r in read_jsonl(pred_path)}
+    if resumed_meta is not None:
+        current = {
+            "scenarios_sha256": sha256_file(scenarios_path),
+            "knowledge_sha256": sha256_dir(args.knowledge_dir),
+            "prompt_version": PROMPT_VERSION,
+            "model_under_test": settings.model_under_test,
+            "top_k": settings.top_k,
+            "retrieval": settings.retrieval,
+        }
+        recorded = {
+            "scenarios_sha256": resumed_meta["scenarios_sha256"],
+            "knowledge_sha256": resumed_meta["knowledge_sha256"],
+            "prompt_version": resumed_meta["prompt_version"],
+            "model_under_test": resumed_meta["settings"].get("model_under_test"),
+            "top_k": resumed_meta["settings"].get("top_k"),
+            "retrieval": resumed_meta["settings"].get("retrieval", "single"),
+        }
+        if settings.mock:
+            current.pop("model_under_test"), recorded.pop("model_under_test")
+        changed = sorted(k for k in current if current[k] != recorded[k])
+        if changed:
+            return fail("cannot resume %s: %s changed since the run started"
+                        % (resumed_meta["run_id"], ", ".join(changed)))
+
+    existing = read_jsonl(pred_path) if pred_path.exists() else []
+    if args.retry_errors and existing:
+        retry = [r for r in existing if is_service_error(r.get("error"))]
+        if retry:
+            keep = [r for r in existing if not is_service_error(r.get("error"))]
+            with open(pred_path, "w", encoding="utf-8", newline="\n") as f:
+                for r in keep:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            for r in retry:
+                append_jsonl(run_dir / "retried_rows.jsonl", dict(r, retried_at=now_iso()))
+            kinds = sorted({r["error"].split(" - ")[0][:60] for r in retry})
+            resumed_meta.setdefault("retries", []).append({
+                "at": now_iso(), "rows": len(retry), "errors": kinds,
+                "note": "rows without a model reply because of a service error, re-run with "
+                        "unchanged scenarios, knowledge, prompt, model and thresholds",
+            })
+            with open(run_dir / "run_meta.json", "w", encoding="utf-8") as f:
+                json.dump(resumed_meta, f, ensure_ascii=False, indent=2)
+            existing = keep
+            print("retrying %d rows that failed with a service error" % len(retry))
+    done: Set[Tuple[str, str]] = {(r["system"], r["scenario_id"]) for r in existing}
 
     if resumed_meta is None:
         meta = {
@@ -250,6 +317,10 @@ def main(argv=None) -> int:
             if (name, s.id) in done:
                 continue
             out = SYSTEMS[name](s, ctx)
+            if out.error and FATAL_SERVICE_ERROR.search(out.error):
+                print("stopped at [%d/%d] %s %s: %s" % (n, total, name, s.id, out.error[:160]))
+                return fail("the model service refused the request. Fix the account, then run:\n"
+                            "  python scripts/run_eval.py --resume %s" % run_id, code=3)
             row = to_row(out, s, run_id, fact_ids)
             append_jsonl(pred_path, row)
             mark = "ok " if row["correct"] else ("ERR" if row["action"] is None else "x  ")

@@ -1,0 +1,66 @@
+{
+  "run_id": "heldout-stripped-20261002",
+  "created_at": "2026-10-02T12:49:13+08:00",
+  "split": "heldout",
+  "variant": "stripped",
+  "systems": [
+    "rule",
+    "llm",
+    "rag"
+  ],
+  "mock": false,
+  "settings": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "model_under_test": "anthropic/claude-opus-5",
+    "model_gen_dev": "openai/gpt-6-sol",
+    "model_gen_heldout": "google/gemini-3.8-flash",
+    "top_k": 5,
+    "retrieval": "fused",
+    "max_tokens": 4000,
+    "response_format": "json_schema",
+    "price_in_per_mtok": 5.0,
+    "price_out_per_mtok": 25.0,
+    "price_checked_on": "2026-09-29",
+    "mock": false
+  },
+  "prompt_version": "p2",
+  "scenarios_file": "data/scenarios/heldout_stripped.jsonl",
+  "scenarios_sha256": "f0d824779c0fb187596d5642088e893db00f630b6825551cf3afbd31984c8618",
+  "knowledge_dir": "data/knowledge",
+  "knowledge_sha256": {
+    "playbook.jsonl": "a1e43dd77f96c0066c8b876185fbb165628decdf49e5b8d620ec0ecedad598d2",
+    "products.jsonl": "f0b604a351a156b3d27ed8a08539922c6aa3dab1d96c19d05d3453fd4c243ab7"
+  },
+  "n_knowledge_items": 69,
+  "n_scenarios": 80,
+  "limit": null,
+  "n_unlabeled_skipped": 0,
+  "gate": {
+    "tau_conf": 0.84,
+    "tau_ret": 13.3354,
+    "selected_on_run": "dev-raw-20260930-c",
+    "selected_on_split": "dev",
+    "system": "rag",
+    "rule": "10th percentile of dev confidence and of dev retrieval score (0 wrong answers on dev, too few for the accuracy rule)",
+    "rule_name": "percentile",
+    "dev_wrong_answers": 0,
+    "selected_at": "2026-09-29T20:23:43+08:00",
+    "dev_abstain_rate": 0.175,
+    "dev_answered_accuracy": 1.0,
+    "dev_abstained_would_be_wrong": 0.0,
+    "n": 40
+  },
+  "force_reason": null,
+  "vskc_version": "0.1.0",
+  "python": "3.12.5",
+  "retries": [
+    {
+      "at": "2026-10-02T13:02:04+08:00",
+      "rows": 37,
+      "errors": [
+        "APIStatusError: Error code: 402"
+      ],
+      "note": "rows without a model reply because of a service error, re-run with unchanged scenarios, knowledge, prompt, model and thresholds"
+    }
+  ]
+}

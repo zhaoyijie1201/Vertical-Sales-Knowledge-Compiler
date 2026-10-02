@@ -19,7 +19,7 @@ from vskc import paths
 from vskc.cli import fail, md_table, num, pct, rel, setup_console
 from vskc.dataio import read_jsonl
 from vskc.metrics import (abstention_summary, accuracy, confusion, cost_per_scenario,
-                          majority_baseline, mean, percentile, slice_accuracy, wilson)
+                          majority_baseline, mcnemar_exact, mean, percentile, slice_accuracy, wilson)
 from vskc.schema import Action
 
 SYSTEM_LABEL = {"rule": "Rule-based baseline", "llm": "Generic LLM (no knowledge)",
@@ -131,6 +131,31 @@ def t4_cost(run) -> pd.DataFrame:
     return pd.DataFrame(recs)
 
 
+def t6_paired(run) -> Optional[pd.DataFrame]:
+    """Exact McNemar test between systems on the same scenarios, overall and by subset."""
+    idx = {}
+    for r in run["rows"]:
+        idx.setdefault(r["system"], {})[r["scenario_id"]] = r
+    subsets = [("all", lambda r: True),
+               ("depends on a supplier fact", lambda r: bool(r.get("depends_on_supplier_fact"))),
+               ("no supplier fact", lambda r: not r.get("depends_on_supplier_fact")),
+               ("clear label", lambda r: r.get("label_certainty") == "clear"),
+               ("judgment label", lambda r: r.get("label_certainty") == "judgment")]
+    recs = []
+    for a, b in (("rag", "llm"), ("llm", "rule"), ("rag", "rule")):
+        if a not in idx or b not in idx:
+            continue
+        for name, keep in subsets:
+            ids = [i for i, r in idx[a].items() if keep(r) and i in idx[b]]
+            if not ids or (name != "all" and len(ids) == len(idx[a])):
+                continue
+            t = mcnemar_exact([idx[a][i]["correct"] for i in ids], [idx[b][i]["correct"] for i in ids])
+            recs.append({"comparison": "%s vs %s" % (a, b), "subset": name, "n": t["n"],
+                         "only first right": t["only_a"], "only second right": t["only_b"],
+                         "exact McNemar p": "< 0.001" if t["p_value"] < 0.001 else "%.3f" % t["p_value"]})
+    return pd.DataFrame(recs) if recs else None
+
+
 def t5_confusion(run, system: str) -> Optional[pd.DataFrame]:
     rows = by_system(run["rows"]).get(system)
     if not rows:
@@ -173,6 +198,16 @@ def render_run(run, current_gate: Optional[Dict[str, Any]] = None) -> str:
     ]
     if m.get("force_reason"):
         out.append("| held-out re-run reason | %s |" % m["force_reason"])
+    for r in m.get("retries", []):
+        out.append("| rows re-run after a service error | %d on %s (%s) |"
+                   % (r["rows"], r["at"][:10], "; ".join(r["errors"])))
+    n_service = sum(1 for r in run["rows"] if str(r.get("error") or "").startswith(
+        ("APIStatusError", "APIConnectionError", "APITimeoutError", "RateLimitError",
+         "InternalServerError", "AuthenticationError", "PermissionDeniedError")))
+    if n_service:
+        out.append("| **rows that failed with a service error** | **%d. These rows have no model "
+                   "reply. Re-run them with --resume --retry-errors before using the numbers.** |"
+                   % n_service)
     out.append("")
 
     out += ["## T1. Next-best-action accuracy", "",
@@ -187,6 +222,12 @@ def render_run(run, current_gate: Optional[Dict[str, Any]] = None) -> str:
 
     out += ["## T3. Accuracy by slice", "", md_table(t3_slices(run)), ""]
     out += ["## T4. Tokens, cost and latency", "", md_table(t4_cost(run)), ""]
+
+    t6 = t6_paired(run)
+    if t6 is not None:
+        out += ["## T6. Paired comparison", "",
+                "Exact two-sided McNemar test. Only scenarios one system got right and the other "
+                "got wrong count.", "", md_table(t6), ""]
 
     for name in ("rag", "llm", "rule"):
         t5 = t5_confusion(run, name)
