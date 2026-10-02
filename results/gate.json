@@ -1,14 +1,14 @@
 {
   "tau_conf": 0.84,
   "tau_ret": 13.3354,
-  "selected_on_run": "dev-raw-20260930-b",
+  "selected_on_run": "dev-raw-20260930-c",
   "selected_on_split": "dev",
   "system": "rag",
   "rule": "10th percentile of dev confidence and of dev retrieval score (0 wrong answers on dev, too few for the accuracy rule)",
   "rule_name": "percentile",
   "dev_wrong_answers": 0,
-  "selected_at": "2026-09-29T19:48:27+08:00",
-  "dev_abstain_rate": 0.2,
+  "selected_at": "2026-09-29T20:23:43+08:00",
+  "dev_abstain_rate": 0.175,
   "dev_answered_accuracy": 1.0,
   "dev_abstained_would_be_wrong": 0.0,
   "n": 40

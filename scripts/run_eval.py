@@ -103,6 +103,7 @@ def to_row(out: SystemOutput, s: Scenario, run_id: str, fact_ids: Set[str] = fro
         "export_oriented": s.export_oriented,
         "ambiguous": s.ambiguous,
         "depends_on_supplier_fact": bool(s.meta.get("depends_on_supplier_fact", s.id in fact_ids)),
+        "label_certainty": s.meta.get("label_certainty"),
     }
 
 

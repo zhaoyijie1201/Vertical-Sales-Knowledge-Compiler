@@ -94,8 +94,9 @@ def t2_abstention(run, current_gate: Optional[Dict[str, Any]] = None) -> Optiona
 def t3_slices(run) -> pd.DataFrame:
     groups = by_system(run["rows"])
     recs = []
-    for key in ("depends_on_supplier_fact", "sales_stage", "customer_size", "ambiguous", "has_incumbent"):
-        if not any(key in r for r in run["rows"]):
+    for key in ("depends_on_supplier_fact", "label_certainty", "sales_stage", "customer_size",
+                "ambiguous", "has_incumbent"):
+        if not any(r.get(key) is not None for r in run["rows"]):
             continue
         values = sorted({str(r.get(key)) for r in run["rows"]})
         for v in values:

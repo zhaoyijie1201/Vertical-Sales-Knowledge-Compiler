@@ -8,7 +8,7 @@ sensors, export-oriented manufacturing. Course project for PE6201, NTU.
 one customer scenario -> one retrieval step -> one model call -> one structured recommendation
 ```
 
-The output is an action from a closed set of eight, a short rationale, the knowledge
+The output is an action from a closed set of nine, a short rationale, the knowledge
 items it relied on, a confidence score, and a human-review flag.
 
 ## What is compared
@@ -87,6 +87,7 @@ scripts/         data validation, leakage check, evaluation, threshold tuning, r
 data/gold/       40 labeled scenarios, fixed before the knowledge base
 data/knowledge/  playbook, product records, customer SOPs, past outcomes
 data/scenarios/  dev and held-out scenario files, raw and leakage-stripped
+results/annotation/  second annotator's labels
 results/raw/     one line per model call, including failed attempts
 results/runs/    predictions and run metadata
 results/tables/  generated tables
@@ -105,8 +106,14 @@ tests/           unit tests and an end-to-end mock run
   produce a stripped variant. Scores are reported before and after.
 - **Failures stay in the denominator.** A reply that fails validation twice counts as a
   wrong answer.
-- **Generation never labels.** The scenario generator has no target action. A person
-  labels the generated scenarios.
+- **Generation never labels.** The scenario generator has no target action. Labels are
+  assigned afterwards, and every label is reviewed by a person before any system is run
+  on the file.
+- **Held-out labels were checked.** A second annotator, a model from a different vendor
+  than the model under test, labeled all 80 held-out scenarios independently with the
+  whole knowledge base in view. Agreement is 78.8 percent, Cohen's kappa 0.74. Each label
+  is marked `clear` or `judgment`, and accuracy is reported for both groups. Reproduce
+  with `python scripts/second_annotator.py --split heldout`.
 - **Same prompt for both model systems.** The generic LLM and the RAG system differ only
   in whether the knowledge block is empty.
 
@@ -138,6 +145,13 @@ the dev retrieval score: a case is escalated when the system is less confident, 
 knowledge base matches less well, than on nine in ten dev cases. Values are in
 `results/gate.json`.
 
+**Ninth action.** `proceed_to_order` was added on 2026-09-30, after the held-out
+scenarios were generated and before any system was run on them. The first eight actions
+each address a barrier. Reading the generated scenarios showed that about one in eight has
+no barrier: requirements met, terms accepted, customer ready to order. Without a ninth
+action those scenarios would have no correct label. The 40 dev labels are unchanged, and
+dev was re-run with the nine-action prompt (prompt version p2) before thresholds were set.
+
 ## Build or rent
 
 | Layer | Choice | Own or rent |
@@ -164,7 +178,12 @@ Known limits:
 
 - All data is synthetic. No real customer data is used. Results say how the systems
   behave on this data, not how they would behave in a live account.
-- Gold labels reflect one person's judgement. There is no second annotator.
+- Labels reflect one reviewer's judgement. On held-out, 50 of the 80 labels are judgement
+  calls where another action is defensible; the recorded alternative is in each record's
+  `meta`. Results on the 30 clear labels carry more weight.
+- Held-out scenarios are generated from independently sampled attributes, so some
+  combinations are unusual, and in five of them the generator stated a supplier-side
+  fact that conflicts with the knowledge base. They were kept as generated and flagged.
 - The silent failure to watch for is a recommendation that reads as commercially
   plausible and is wrong for the customer's industry. The gate escalates low-confidence
   and uncovered cases, and the report states how many escalated cases would have been

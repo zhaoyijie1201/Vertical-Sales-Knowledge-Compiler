@@ -10,7 +10,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 from .schema import ACTION_DEFINITIONS, Action, KnowledgeItem, Scenario
 
-PROMPT_VERSION = "p1"
+PROMPT_VERSION = "p2"
 
 
 def _action_block() -> str:

@@ -18,6 +18,7 @@ class Action(str, Enum):
     escalate_pricing = "escalate_pricing"
     nurture = "nurture"
     disqualify = "disqualify"
+    proceed_to_order = "proceed_to_order"
 
 
 # DRAFT definitions. Freeze them once the 40 gold labels are written.
@@ -58,7 +59,18 @@ ACTION_DEFINITIONS: Dict[Action, Dict[str, str]] = {
                 "mismatch, or volume far below the minimum order quantity.",
         "boundary": "Unlike nurture, time will not resolve the mismatch.",
     },
+    # Added on 2026-09-30, before any held-out run. The eight actions above each address a
+    # barrier; generated scenarios showed that some opportunities have none.
+    Action.proceed_to_order: {
+        "when": "No barrier remains: the requirements are met, the terms are accepted, and the "
+                "customer has a purchase date or is ready to order.",
+        "boundary": "Unlike nurture, the customer intends to buy in the near term. Unlike "
+                    "request_spec_review, no technical question is open.",
+    },
 }
+
+# The gold file was locked when the action set had these eight members.
+GOLD_ACTIONS = tuple(a for a in Action if a is not Action.proceed_to_order)
 
 
 class SalesStage(str, Enum):

@@ -31,6 +31,8 @@ LEAK_TERMS: Dict[str, List[str]] = {
         r"\bnurtur\w*", r"(keep|stay) in touch", r"check back (in|next)"],
     Action.disqualify.value: [
         r"\bdisqualif\w*", r"walk away", r"(not|stop) pursu\w+", r"drop (the|this) (lead|opportunity|account)"],
+    Action.proceed_to_order.value: [
+        r"proceed (to|with) (the )?order"],
     "action_name": [r"\b(%s)\b" % "|".join(a.value for a in Action)],
     "advice": [
         r"\b(best|recommended|right|logical|obvious) next (step|move|action)\b",

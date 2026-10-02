@@ -119,3 +119,16 @@ def percentile(values: Sequence[float], q: float) -> Optional[float]:
     vs = sorted(values)
     idx = min(len(vs) - 1, max(0, int(round(q * (len(vs) - 1)))))
     return vs[idx]
+
+
+def cohen_kappa(a: Sequence[str], b: Sequence[str]) -> float:
+    """Agreement between two annotators corrected for chance. 1 is perfect, 0 is chance level."""
+    if len(a) != len(b) or not a:
+        raise ValueError("need two label lists of the same non-zero length")
+    n = len(a)
+    observed = sum(1 for x, y in zip(a, b) if x == y) / n
+    ca, cb = Counter(a), Counter(b)
+    expected = sum(ca[k] * cb.get(k, 0) for k in ca) / (n * n)
+    if expected >= 1.0:
+        return 1.0
+    return (observed - expected) / (1.0 - expected)

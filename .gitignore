@@ -35,3 +35,6 @@ results/tables/*mock-*.md
 # notes and working documents stay local; only the top-level README is published
 *.md
 !/README.md
+
+# labeling sheets stay local; labels are stored in data/scenarios/
+labeling/

@@ -16,7 +16,7 @@ from vskc.cli import setup_console
 from vskc.dataio import load_knowledge, load_scenarios
 from vskc.leakage import find_leaks
 from vskc.metrics import majority_baseline
-from vskc.schema import Action, SalesStage, Scenario
+from vskc.schema import GOLD_ACTIONS, SalesStage, Scenario
 
 QUOTA = {
     "total": 40,
@@ -67,7 +67,7 @@ def check_gold(path: Path, c: Checker) -> None:
     c.check({r.id for r in rows} == expected, "ids are gold-001 to gold-%03d" % q["total"])
 
     actions = Counter(r.label.value for r in rows if r.label)
-    for a in Action:
+    for a in GOLD_ACTIONS:
         n = actions.get(a.value, 0)
         c.check(q["per_action_min"] <= n <= q["per_action_max"],
                 "action %-26s %2d (need %d to %d)" % (a.value, n, q["per_action_min"], q["per_action_max"]))

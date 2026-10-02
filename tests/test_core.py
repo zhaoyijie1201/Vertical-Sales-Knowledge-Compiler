@@ -290,3 +290,13 @@ def test_hook_prompt_states_requirement_but_no_supplier_fact():
                 assert forbidden not in text
         for a in Action:
             assert a.value not in text
+
+
+def test_cohen_kappa():
+    from vskc.metrics import cohen_kappa
+
+    assert cohen_kappa(["a", "b", "a", "b"], ["a", "b", "a", "b"]) == pytest.approx(1.0)
+    assert cohen_kappa(["a", "a", "b", "b"], ["a", "b", "a", "b"]) == pytest.approx(0.0)
+    assert 0 < cohen_kappa(["a", "a", "b", "b", "c"], ["a", "a", "b", "c", "c"]) < 1
+    with pytest.raises(ValueError):
+        cohen_kappa(["a"], [])

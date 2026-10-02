@@ -103,3 +103,47 @@ def test_leakage_script(tmp_path, scenarios_path, knowledge_dir):
     assert code == 0
     assert len(read_jsonl(out)) == 6
     assert (tmp_path / "results" / "tables" / "leakage_scenarios_demo.md").exists()
+
+
+def test_labeling_round_trip(tmp_path, scenarios_path, monkeypatch):
+    import csv
+    import shutil
+
+    import labeling
+    from vskc.dataio import load_scenarios, write_jsonl
+
+    data = tmp_path / "scenarios"
+    data.mkdir()
+    rows = [dict(s.model_dump(mode="json"), label=None, label_rationale=None)
+            for s in load_scenarios(scenarios_path)]
+    write_jsonl(data / "heldout.jsonl", rows)
+    monkeypatch.setattr(labeling.paths, "SCENARIOS", data)
+    monkeypatch.setattr(labeling, "LABELING_DIR", tmp_path / "labeling")
+
+    assert labeling.main(["export", "--split", "heldout"]) == 0
+    sheet = tmp_path / "labeling" / "heldout_labels.csv"
+    with open(sheet, "r", encoding="utf-8-sig", newline="") as f:
+        table = list(csv.DictReader(f))
+    assert len(table) == 6 and all(r["label"] == "" for r in table)
+    assert "grid" not in table[0] and "meta" not in table[0]
+
+    table[0]["label"], table[0]["label_rationale"] = "nurture", "No purchase planned this year."
+    table[1]["label"], table[1]["label_rationale"] = "call_them", "x"
+    with open(sheet, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(table[0]))
+        w.writeheader()
+        w.writerows(table)
+    assert labeling.main(["import", "--split", "heldout", "--reviewer", "tester"]) != 0
+    assert all(s.label is None for s in load_scenarios(data / "heldout.jsonl"))
+
+    table[1]["label"], table[1]["label_rationale"] = "", ""
+    with open(sheet, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(table[0]))
+        w.writeheader()
+        w.writerows(table)
+    assert labeling.main(["import", "--split", "heldout", "--reviewer", "tester"]) == 0
+    after = load_scenarios(data / "heldout.jsonl")
+    assert after[0].label.value == "nurture" and after[0].meta["reviewed_by"] == "tester"
+    assert after[0].meta["review_status"] == "human_reviewed"
+    assert [s.narrative for s in after] == [r["narrative"] for r in rows]
+    assert sum(1 for s in after if s.label) == 1
