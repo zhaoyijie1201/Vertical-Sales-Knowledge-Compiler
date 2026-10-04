@@ -20,6 +20,7 @@ items it relied on, a confidence score, and a human-review flag.
   - [2.1 Reproduce the tables without an API key](#21-reproduce-the-tables-without-an-api-key)
   - [2.2 Run the tests](#22-run-the-tests)
   - [2.3 Run it yourself](#23-run-it-yourself)
+  - [2.4 Web interface](#24-web-interface)
 - [3. Repository layout](#3-repository-layout)
 - [4. Product](#4-product)
   - [4.1 Persona](#41-persona)
@@ -145,6 +146,22 @@ The tests use mock replies and small fixture files. They call no model and need 
 
 Add `--mock` to `run_eval.py` to exercise the pipeline with deterministic fake replies.
 Mock runs are labeled as such and excluded from the summary.
+
+### 2.4 Web interface
+
+`python -m vskc.api` serves a single-page interface at `http://127.0.0.1:8000`. The
+screenshots below come from the recorded held-out run, so they show exactly what was scored.
+
+**Workbench.** One held-out scenario (`ho-054`) with the three systems side by side. The
+customer needs 260 °C continuously; only the RAG system knows the series stops at 180 °C,
+cites the product record, and passes the confidence gate.
+
+![Workbench: one scenario, three systems side by side](assets/screenshots/workbench.png)
+
+**Results.** Held-out accuracy with 95% intervals, accuracy by subset, the paired McNemar
+tests, the confidence gate, run-to-run variation, and cost and latency.
+
+![Results: accuracy, paired comparison, confidence gate, cost](assets/screenshots/results.png)
 
 ## 3. Repository layout
 
